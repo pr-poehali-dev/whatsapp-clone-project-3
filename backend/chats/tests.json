@@ -1,0 +1,31 @@
+{
+  "tests": [
+    {
+      "name": "Test get chats list",
+      "method": "GET",
+      "path": "/",
+      "headers": {
+        "X-User-Id": "1"
+      },
+      "expectedStatus": 200,
+      "expectedBody": {
+        "chats": "array"
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Test create chat with contact",
+      "method": "POST",
+      "path": "/",
+      "headers": {
+        "X-User-Id": "1"
+      },
+      "body": {
+        "action": "create",
+        "phone": "+79999999999"
+      },
+      "expectedStatus": 200,
+      "bodyMatcher": "partial"
+    }
+  ]
+}

@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import Icon from '@/components/ui/icon';
 import { Badge } from '@/components/ui/badge';
+import AddContactDialog from './AddContactDialog';
 
 export interface Chat {
   id: string;
@@ -20,9 +21,11 @@ interface ChatListProps {
   chats: Chat[];
   selectedChatId?: string;
   onChatSelect: (chatId: string) => void;
+  userId?: string;
+  onContactAdded?: () => void;
 }
 
-export default function ChatList({ chats, selectedChatId, onChatSelect }: ChatListProps) {
+export default function ChatList({ chats, selectedChatId, onChatSelect, userId, onContactAdded }: ChatListProps) {
   const [searchQuery, setSearchQuery] = useState('');
 
   const filteredChats = chats.filter(chat =>
@@ -36,9 +39,9 @@ export default function ChatList({ chats, selectedChatId, onChatSelect }: ChatLi
           <h1 className="text-2xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
             Чаты
           </h1>
-          <button className="p-2 hover:bg-accent rounded-lg transition-colors">
-            <Icon name="Plus" size={24} />
-          </button>
+          {userId && onContactAdded && (
+            <AddContactDialog userId={userId} onContactAdded={onContactAdded} />
+          )}
         </div>
         <div className="relative">
           <Icon name="Search" size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />

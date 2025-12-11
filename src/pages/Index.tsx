@@ -1,175 +1,137 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import ChatList, { type Chat } from '@/components/ChatList';
 import ChatWindow, { type Message } from '@/components/ChatWindow';
 import ProfilePanel from '@/components/ProfilePanel';
+import AuthScreen from '@/components/AuthScreen';
 import { Button } from '@/components/ui/button';
 import Icon from '@/components/ui/icon';
-
-const mockChats: Chat[] = [
-  {
-    id: '1',
-    name: 'Анна Петрова',
-    avatar: '',
-    lastMessage: 'Привет! Как дела?',
-    timestamp: '12:34',
-    unread: 2,
-    isOnline: true,
-    isTyping: false,
-  },
-  {
-    id: '2',
-    name: 'Иван Сидоров',
-    avatar: '',
-    lastMessage: 'Отправил тебе файлы',
-    timestamp: 'вчера',
-    unread: 0,
-    isOnline: false,
-  },
-  {
-    id: '3',
-    name: 'Мария Иванова',
-    avatar: '',
-    lastMessage: 'Созвонимся сегодня?',
-    timestamp: '10:22',
-    unread: 1,
-    isOnline: true,
-    isTyping: true,
-  },
-  {
-    id: '4',
-    name: 'Дмитрий Козлов',
-    avatar: '',
-    lastMessage: 'Спасибо за помощь!',
-    timestamp: '08:15',
-    unread: 0,
-    isOnline: false,
-  },
-  {
-    id: '5',
-    name: 'Елена Волкова',
-    avatar: '',
-    lastMessage: 'Отлично, договорились!',
-    timestamp: 'ПН',
-    unread: 0,
-    isOnline: true,
-  },
-];
-
-const mockMessages: { [chatId: string]: Message[] } = {
-  '1': [
-    {
-      id: '1',
-      text: 'Привет! Как твои дела?',
-      timestamp: '12:30',
-      isSent: false,
-    },
-    {
-      id: '2',
-      text: 'Привет! Все отлично, работаю над новым проектом',
-      timestamp: '12:32',
-      isSent: true,
-      status: 'read',
-    },
-    {
-      id: '3',
-      text: 'Звучит интересно! Расскажешь подробнее?',
-      timestamp: '12:33',
-      isSent: false,
-    },
-    {
-      id: '4',
-      text: 'Конечно! Это мессенджер с современным интерфейсом',
-      timestamp: '12:34',
-      isSent: true,
-      status: 'read',
-    },
-  ],
-  '2': [
-    {
-      id: '1',
-      text: 'Смотри какие файлы нашел',
-      timestamp: 'вчера',
-      isSent: false,
-    },
-    {
-      id: '2',
-      text: 'Документация проекта',
-      timestamp: 'вчера',
-      isSent: false,
-      attachment: {
-        type: 'file',
-        url: '',
-        name: 'documentation.pdf',
-      },
-    },
-  ],
-  '3': [
-    {
-      id: '1',
-      text: 'У меня есть важная тема для обсуждения',
-      timestamp: '10:20',
-      isSent: false,
-    },
-    {
-      id: '2',
-      text: 'Давай созвонимся сегодня вечером?',
-      timestamp: '10:22',
-      isSent: false,
-    },
-  ],
-};
-
-const defaultProfile = {
-  name: 'Вы',
-  phone: '+7 (999) 123-45-67',
-  bio: 'Всегда на связи! 🚀',
-  avatar: '',
-  showOnlineStatus: true,
-  showLastSeen: true,
-};
+import { api, type User } from '@/lib/api';
+import { useToast } from '@/hooks/use-toast';
 
 export default function Index() {
-  const [selectedChatId, setSelectedChatId] = useState<string>('1');
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [token, setToken] = useState<string | null>(null);
+  const [selectedChatId, setSelectedChatId] = useState<string>('');
   const [showProfile, setShowProfile] = useState(false);
-  const [chats, setChats] = useState<Chat[]>(mockChats);
-  const [messages, setMessages] = useState(mockMessages);
-  const [profile, setProfile] = useState(defaultProfile);
+  const [chats, setChats] = useState<Chat[]>([]);
+  const [messages, setMessages] = useState<{ [chatId: string]: Message[] }>({});
+  const [loading, setLoading] = useState(false);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    const savedUser = localStorage.getItem('user');
+    const savedToken = localStorage.getItem('token');
+    
+    if (savedUser && savedToken) {
+      setCurrentUser(JSON.parse(savedUser));
+      setToken(savedToken);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (currentUser && token) {
+      loadChats();
+      const interval = setInterval(loadChats, 5000);
+      return () => clearInterval(interval);
+    }
+  }, [currentUser, token]);
+
+  useEffect(() => {
+    if (selectedChatId && token) {
+      loadMessages(selectedChatId);
+    }
+  }, [selectedChatId, token]);
+
+  const handleAuth = (user: User, userToken: string) => {
+    setCurrentUser(user);
+    setToken(userToken);
+    localStorage.setItem('user', JSON.stringify(user));
+    localStorage.setItem('token', userToken);
+  };
+
+  const loadChats = async () => {
+    if (!token) return;
+    try {
+      const response = await api.getChats(token);
+      setChats(response.chats || []);
+    } catch (error) {
+      console.error('Failed to load chats:', error);
+    }
+  };
+
+  const loadMessages = async (chatId: string) => {
+    if (!token) return;
+    try {
+      const response = await api.getMessages(token, chatId);
+      setMessages((prev) => ({ ...prev, [chatId]: response.messages || [] }));
+    } catch (error) {
+      console.error('Failed to load messages:', error);
+    }
+  };
+
+  const handleSendMessage = async (text: string) => {
+    if (!token || !selectedChatId) return;
+
+    try {
+      const response = await api.sendMessage(token, selectedChatId, text);
+      
+      setMessages((prev) => ({
+        ...prev,
+        [selectedChatId]: [...(prev[selectedChatId] || []), response.message],
+      }));
+
+      await loadChats();
+    } catch (error) {
+      toast({
+        title: 'Ошибка',
+        description: 'Не удалось отправить сообщение',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleBlockUser = async () => {
+    if (!token || !selectedChatId) return;
+    
+    try {
+      await api.blockUser(token, selectedChatId);
+      toast({
+        title: 'Пользователь заблокирован',
+        description: 'Вы больше не будете получать сообщения от этого пользователя',
+      });
+      setSelectedChatId('');
+      await loadChats();
+    } catch (error) {
+      toast({
+        title: 'Ошибка',
+        description: 'Не удалось заблокировать пользователя',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleUpdateProfile = (updatedProfile: any) => {
+    if (currentUser) {
+      const updated = { ...currentUser, ...updatedProfile };
+      setCurrentUser(updated);
+      localStorage.setItem('user', JSON.stringify(updated));
+    }
+  };
+
+  if (!currentUser || !token) {
+    return <AuthScreen onAuth={handleAuth} />;
+  }
 
   const selectedChat = chats.find((chat) => chat.id === selectedChatId);
   const currentMessages = messages[selectedChatId] || [];
 
-  const handleSendMessage = (text: string) => {
-    const newMessage: Message = {
-      id: Date.now().toString(),
-      text,
-      timestamp: new Date().toLocaleTimeString('ru-RU', {
-        hour: '2-digit',
-        minute: '2-digit',
-      }),
-      isSent: true,
-      status: 'sent',
-    };
-
-    setMessages({
-      ...messages,
-      [selectedChatId]: [...currentMessages, newMessage],
-    });
-
-    setChats(
-      chats.map((chat) =>
-        chat.id === selectedChatId
-          ? { ...chat, lastMessage: text, timestamp: 'сейчас', isTyping: false }
-          : chat
-      )
-    );
-  };
-
-  const handleBlockUser = () => {
-    alert(`Пользователь ${selectedChat?.name} заблокирован`);
-  };
-
-  const handleUpdateProfile = (updatedProfile: typeof profile) => {
-    setProfile(updatedProfile);
+  const profile = {
+    name: currentUser.name,
+    phone: currentUser.phone,
+    bio: currentUser.bio || '',
+    avatar: currentUser.avatar,
+    showOnlineStatus: true,
+    showLastSeen: true,
   };
 
   return (
@@ -179,6 +141,8 @@ export default function Index() {
           chats={chats}
           selectedChatId={selectedChatId}
           onChatSelect={setSelectedChatId}
+          userId={token || undefined}
+          onContactAdded={loadChats}
         />
       </div>
 
